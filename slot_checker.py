@@ -196,12 +196,9 @@ def main():
             logging.info("On I7 page. Starting availability check loop.")
 
             while True:
-                logging.info("Refreshing I7 page to check for new slots...")
-                driver.refresh()
-
                 try:
                     wait.until(EC.presence_of_element_located((By.ID, "pnlgrid")))
-                    logging.info(f"Page refreshed. Current URL: {driver.current_url}")
+                    logging.info(f"Checking for slots. Current URL: {driver.current_url}")
 
                     screenshot_path = "debug_screenshot.png"
                     pagesource_path = "debug_page.html"
@@ -210,15 +207,24 @@ def main():
                         f.write(driver.page_source)
                     logging.info(f"Saved screenshot to '{screenshot_path}' and page source to '{pagesource_path}'")
 
-                    xpath_selector = "//table[@id='grdupevents']//input[@type='checkbox' and not(@disabled)]"
-                    logging.info(f"Checking for element using XPath: {xpath_selector}")
-                    availability_element = driver.find_element(By.XPATH, xpath_selector)
+                    # Look for any checkboxes within the grid panel
+                    xpath_selector = "//*[@id='pnlgrid']//input[@type='checkbox']"
+                    logging.info(f"Checking for elements using XPath: {xpath_selector}")
+                    checkboxes = driver.find_elements(By.XPATH, xpath_selector)
 
-                    if availability_element and availability_element.is_displayed():
-                        logging.info("SUCCESS: Enabled checkbox found, indicating an available slot!")
+                    open_slot_found = False
+                    for cb in checkboxes:
+                        if cb.is_displayed() and cb.is_enabled():
+                            open_slot_found = True
+                            logging.info("SUCCESS: Enabled and visible checkbox found, indicating an available slot!")
+                            break
+
+                    if open_slot_found:
                         send_email("Consultation Slot Available!", "An appointment slot has opened up on the Manipal portal. Please log in to book it.")
                         logging.info("Script finished after finding a slot. Exiting.")
                         return
+                    else:
+                        logging.info("Did not find an enabled and visible checkbox on this check. No new slots available.")
 
                 except NoSuchElementException:
                     logging.info("Did not find an enabled checkbox on this check. No new slots available.")
@@ -226,6 +232,9 @@ def main():
 
                 logging.info(f"Waiting for {CHECK_INTERVAL} seconds before the next check...")
                 time.sleep(CHECK_INTERVAL)
+
+                logging.info("Refreshing I7 page to check for new slots...")
+                driver.refresh()
 
         except (TimeoutException, NoSuchElementException) as e:
             logging.error(f"A Selenium error occurred: {e.__class__.__name__}. Retrying after interval.")
